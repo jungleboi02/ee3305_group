@@ -37,7 +37,7 @@ class Planner(Node):
         super().__init__(node_name)
 
         # Parameters: Declare
-        self.declare_parameter("max_access_cost", int(100))
+        self.declare_parameter("max_access_cost", int(120))
 
         # Parameters: Get Values
         self.max_access_cost_ = self.get_parameter("max_access_cost").value
