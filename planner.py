@@ -10,7 +10,7 @@ from rclpy.qos import (
 )
 from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import OccupancyGrid, Path
-test line 14
+  
 def heuristic(c, r, goal_c, goal_r):
     return hypot(c - goal_c, r - goal_r)
 
