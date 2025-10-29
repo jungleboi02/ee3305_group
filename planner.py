@@ -24,8 +24,10 @@ class DijkstraNode:
         self.r = r
         self.expanded = False
 
-    def __lt__(self, other):  # comparator for heapq (min-heap) sorting
-        return self.g < other.g
+    def __lt__(self, other):
+        return self.f < other.f
+ 
+
 
 
 class Planner(Node):
@@ -182,7 +184,9 @@ class Planner(Node):
 
     # Runs the path planning algorithm based on the world coordinates.
     def dijkstra_(self, start_x, start_y, goal_x, goal_y):
-
+        start_node.g = 0.0
+        start_node.h = heuristic(rbt_c, rbt_r, goal_c, goal_r)
+        start_node.f = start_node.g + start_node.h
         # Initializations ---------------------------------
 
         # Initialize nodes - create a node for every cell in the costmap
@@ -286,9 +290,12 @@ class Planner(Node):
                 
                 # Update if this path is better
                 if g_tentative < nb_node.g:
-                    nb_node.g = g_tentative
-                    nb_node.parent = node
-                    heappush(open_list, nb_node)
+                nb_node.g = g_tentative
+                nb_node.h = heuristic(nb_c, nb_r, goal_c, goal_r)
+                nb_node.f = nb_node.g + nb_node.h
+                nb_node.parent = node
+                heappush(open_list, nb_node)
+
 
         self.get_logger().warn("No Path Found!")
 
