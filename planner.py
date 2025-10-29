@@ -184,9 +184,7 @@ class Planner(Node):
 
     # Runs the path planning algorithm based on the world coordinates.
     def dijkstra_(self, start_x, start_y, goal_x, goal_y):
-        start_node.g = 0.0
-        start_node.h = heuristic(rbt_c, rbt_r, goal_c, goal_r)
-        start_node.f = start_node.g + start_node.h
+     
         # Initializations ---------------------------------
 
         # Initialize nodes - create a node for every cell in the costmap
@@ -203,6 +201,8 @@ class Planner(Node):
         
         # Set start node g-cost to 0
         start_node.g = 0.0
+        start_node.h = heuristic(rbt_c, rbt_r, goal_c, goal_r)
+        start_node.f = start_node.g + start_node.h
 
         # Initialize open list
         open_list = []
