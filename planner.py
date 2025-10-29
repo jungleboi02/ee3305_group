@@ -290,11 +290,11 @@ class Planner(Node):
                 
                 # Update if this path is better
                 if g_tentative < nb_node.g:
-                nb_node.g = g_tentative
-                nb_node.h = heuristic(nb_c, nb_r, goal_c, goal_r)
-                nb_node.f = nb_node.g + nb_node.h
-                nb_node.parent = node
-                heappush(open_list, nb_node)
+                    nb_node.g = g_tentative
+                    nb_node.h = heuristic(nb_c, nb_r, goal_c, goal_r)
+                    nb_node.f = nb_node.g + nb_node.h
+                    nb_node.parent = node
+                    heappush(open_list, nb_node)
 
 
         self.get_logger().warn("No Path Found!")
