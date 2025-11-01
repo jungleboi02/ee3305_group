@@ -62,7 +62,7 @@ class Planner(Node):
             Path,
             "path_request",
             self.callbackSubPathRequest_,
-            10
+            10,
         )
         
         # Handles: Publishers
@@ -70,7 +70,7 @@ class Planner(Node):
         self.pub_path_ = self.create_publisher(
             Path,
             "path",
-            10
+            10,
         )
         
         # Handles: Timers
@@ -287,12 +287,14 @@ class Planner(Node):
                 
                 # Calculate tentative g-cost
                 g_tentative = node.g + distance * (self.costmap_[nb_idx] + 1)
+                h_tentative = heuristic(nb_c, nb_r, goal_c, goal_r)
+                f_tentative = g_tentative + h_tentative
                 
                 # Update if this path is better
-                if g_tentative < nb_node.g:
+                if f_tentative < nb_node.f:
                     nb_node.g = g_tentative
-                    nb_node.h = heuristic(nb_c, nb_r, goal_c, goal_r)
-                    nb_node.f = nb_node.g + nb_node.h
+                    nb_node.h = h_tentative
+                    nb_node.f = f_tentative
                     nb_node.parent = node
                     heappush(open_list, nb_node)
 
