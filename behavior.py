@@ -26,21 +26,21 @@ class Behavior(Node):
             PoseStamped,
             "goal_pose",
             self.callbackSubGoalPose_,
-            10
+            10,
         )
 
         self.sub_odom_ = self.create_subscription(
             Odometry,
             "odom",
             self.callbackSubOdom_,
-            10
+            10,
         )
 
         # Handles: Topic Publishers
         self.pub_path_request_ = self.create_publisher(
             Path,
             "path_request",
-            10
+            10,
         )
 
         # Handles: Timers
