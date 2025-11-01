@@ -36,7 +36,7 @@ class Controller(Node):
             Path,
             "path",
             self.callbackSubPath_,
-            10
+            10,
         )
 
         # Odometry subscriber
@@ -44,7 +44,7 @@ class Controller(Node):
             Odometry,
             "odom",
             self.callbackSubOdom_,
-            10
+            10,
         )
 
         # Handles: Topic Publishers
@@ -52,14 +52,14 @@ class Controller(Node):
         self.pub_cmd_vel_ = self.create_publisher(
             TwistStamped,
             "cmd_vel",
-            10
+            10,
         )
 
         # Lookahead point publisher
         self.pub_lookahead_ = self.create_publisher(
             PoseStamped,
             "lookahead",
-            10
+            10,
         )
 
         # Handles: Timers
@@ -99,7 +99,7 @@ class Controller(Node):
     # Make sure path and robot positions are already received, and the path contains at least one point.
     def getLookaheadPoint_(self):
         # Step 1: Find the point along the path that is closest to the robot
-        min_distance = inf  # Initialize minimum distance to infinity
+        min_distance = float('inf')  # Initialize minimum distance to infinity
         closest_idx = 0  # Initialize index of closest point
         
         # Iterate through all path points to find the closest one
@@ -191,6 +191,9 @@ class Controller(Node):
         # Step 7: Calculate velocities
         # Linear velocity is constant (lookahead_lin_vel_)
         lin_vel = self.lookahead_lin_vel_
+        if x_prime < 0:
+            lin_vel *= -1.0
+            curvature *= -1.0   # reverse curvature sign to steer correctly
         
         # Angular velocity is linear velocity times curvature: ω = v * c
         ang_vel = lin_vel * curvature
