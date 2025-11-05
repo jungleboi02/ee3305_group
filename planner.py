@@ -37,7 +37,7 @@ class Planner(Node):
         super().__init__(node_name)
 
         # Parameters: Declare
-        self.declare_parameter("max_access_cost", int(500))
+        self.declare_parameter("max_access_cost", int(100))
 
         # Parameters: Get Values
         self.max_access_cost_ = self.get_parameter("max_access_cost").value
@@ -152,6 +152,22 @@ class Planner(Node):
         self.get_logger().info(
             f"Publishing interpolated path between Start and Goal. Implement dijkstra_() instead."
         )
+
+    # smooths path
+    def smoothPath(self, path, weight_data=0.8, weight_smooth=0.1, tolerance=1e-4, max_iterations=100):
+        smoothed = [p.pose.position for p in path.poses]
+        new_path = [p.pose.position for p in path.poses]
+
+        for _ in range(max_iterations):
+            total_change = 0.0
+            for i in range(1, len(smoothed) - 1):
+                x_old, y_old = new_path[i].x, new_path[i].y          # in map coordinates
+                new_path[i].x += weight_data * (smoothed[i].x - new_path[i].x) + weight_smooth * (new_path[i-1].x + new_path[i+1].x - 2.0 * new_path[i].x)
+                new_path[i].y += weight_data * (smoothed[i].y - new_path[i].y) + weight_smooth * (new_path[i-1].y + new_path[i+1].y - 2.0 * new_path[i].y)
+                total_change += abs(new_path[i].x - x_old) + abs(new_path[i].y - y_old)
+            if total_change < tolerance:
+                break
+        return new_path
 
     # Converts world coordinates to cell column and cell row.
     def XYToCR_(self, x, y):
