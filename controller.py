@@ -191,6 +191,8 @@ class Controller(Node):
         # Step 7: Calculate velocities
         # Linear velocity is constant (lookahead_lin_vel_)
         lin_vel = self.lookahead_lin_vel_
+        
+        # reverse code
         if x_prime < 0:
             lin_vel *= -1.0
             curvature *= -1.0   # reverse curvature sign to steer correctly
