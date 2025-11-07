@@ -26,6 +26,9 @@ class DijkstraNode:
 
     def __lt__(self, other):
         return self.f < other.f
+ 
+
+
 
 class Planner(Node):
 
@@ -59,7 +62,7 @@ class Planner(Node):
             Path,
             "path_request",
             self.callbackSubPathRequest_,
-            10
+            10,
         )
         
         # Handles: Publishers
@@ -67,7 +70,7 @@ class Planner(Node):
         self.pub_path_ = self.create_publisher(
             Path,
             "path",
-            10
+            10,
         )
         
         # Handles: Timers
@@ -77,36 +80,27 @@ class Planner(Node):
         self.has_new_request_ = False
         self.received_map_ = False
 
-    def risk_metric(self, c, r):
-        max_cost = 100
-        neighbor_offsets = [
-            (1, 0), (-1, 0), (0, 1), (0, -1),
-            (1, 1), (-1, 1), (-1, -1), (1, -1)
-        ]
-        risk = 0.0
-        for dc, dr in neighbor_offsets:
-            nc = c + dc
-            nr = r + dr
-            if self.outOfMap_(nc, nr):
-                continue
-            idx = self.CRToIndex_(nc, nr)
-            neighbor_cost = self.costmap_[idx]
-            risk += neighbor_cost / max_cost
-        return min(risk / len(neighbor_offsets), 1.0)
+    # Callbacks =============================================================
 
-    # Callback to copy robot and goal coordinates from requested path message
+    # Path request subscriber callback
     def callbackSubPathRequest_(self, msg: Path):   
+        # Copy robot coordinates from first pose
         self.rbt_x_ = msg.poses[0].pose.position.x
         self.rbt_y_ = msg.poses[0].pose.position.y
         
+        # Copy goal coordinates from second pose
         self.goal_x_ = msg.poses[1].pose.position.x
         self.goal_y_ = msg.poses[1].pose.position.y
         
         self.has_new_request_ = True
 
-    # Callback to copy global costmap data and metadata
+    # Global costmap subscriber callback
+    # This is only run once because the costmap is only published once, at the start of the launch.
     def callbackSubGlobalCostmap_(self, msg: OccupancyGrid):
+        # Copy costmap data
         self.costmap_ = msg.data
+        
+        # Copy costmap metadata
         self.costmap_resolution_ = msg.info.resolution
         self.costmap_origin_x_ = msg.info.origin.position.x
         self.costmap_origin_y_ = msg.info.origin.position.y
@@ -115,71 +109,141 @@ class Planner(Node):
         
         self.received_map_ = True
 
-    # Timer callback to trigger path planning on new request
+    # runs the path planner at regular intervals as long as there is a new path request.
     def callbackTimer_(self):
         if not self.received_map_ or not self.has_new_request_:
-            return
+            return  # silently return if no new request or map is not received.
 
+        # run the path planner
         self.dijkstra_(self.rbt_x_, self.rbt_y_, self.goal_x_, self.goal_y_)
+
         self.has_new_request_ = False
 
-    # Convert world coordinates to costmap cell indices
+    # Publish the interpolated path for testing
+    def publishInterpolatedPath(self, start_x, start_y, goal_x, goal_y):
+        msg_path = Path()
+        msg_path.header.stamp = self.get_clock().now().to_msg()
+        msg_path.header.frame_id = "map"
+
+        dx = start_x - goal_x
+        dy = start_y - goal_y
+        distance = hypot(dx, dy)
+        steps = distance / 0.05
+
+        # Generate poses at every 0.05m
+        for i in range(int(steps)):
+            pose = PoseStamped()
+            pose.pose.position.x = goal_x + dx * i / steps
+            pose.pose.position.y = goal_y + dy * i / steps
+            msg_path.poses.append(pose)
+
+        # Add the goal pose
+        pose = PoseStamped()
+        pose.pose.position.x = goal_x
+        pose.pose.position.y = goal_y
+        msg_path.poses.append(pose)
+
+        # Reverse the path (hint)
+        msg_path.poses.reverse()
+
+        # publish the path
+        self.pub_path_.publish(msg_path)
+
+        self.get_logger().info(
+            f"Publishing interpolated path between Start and Goal. Implement dijkstra_() instead."
+        )
+
+    # smooths path
+    def smoothPath(self, path, weight_data=0.8, weight_smooth=0.1, tolerance=1e-4, max_iterations=100):
+        smoothed = [p.pose.position for p in path.poses]
+        new_path = [p.pose.position for p in path.poses]
+
+        for _ in range(max_iterations):
+            total_change = 0.0
+            for i in range(1, len(smoothed) - 1):
+                x_old, y_old = new_path[i].x, new_path[i].y          # in map coordinates
+                new_path[i].x += weight_data * (smoothed[i].x - new_path[i].x) + weight_smooth * (new_path[i-1].x + new_path[i+1].x - 2.0 * new_path[i].x)
+                new_path[i].y += weight_data * (smoothed[i].y - new_path[i].y) + weight_smooth * (new_path[i-1].y + new_path[i+1].y - 2.0 * new_path[i].y)
+                total_change += abs(new_path[i].x - x_old) + abs(new_path[i].y - y_old)
+            if total_change < tolerance:
+                break
+        return new_path
+
+    # Converts world coordinates to cell column and cell row.
     def XYToCR_(self, x, y):
+        # Calculate distance from origin
         dx = x - self.costmap_origin_x_
         dy = y - self.costmap_origin_y_
+        
+        # Convert to cell coordinates and floor
         c = int(floor(dx / self.costmap_resolution_))
         r = int(floor(dy / self.costmap_resolution_))
+
         return c, r
 
-    # Convert cell indices to world coordinates at cell center
+    # Converts cell column and cell row to world coordinates.
     def CRToXY_(self, c, r):
+        # Convert cell to world coordinates at cell center
         x = self.costmap_origin_x_ + (c + 0.5) * self.costmap_resolution_
         y = self.costmap_origin_y_ + (r + 0.5) * self.costmap_resolution_
+
         return x, y
 
-    # Converts cell indices to flattened costmap array index
+    # Converts cell column and cell row to flattened array index.
     def CRToIndex_(self, c, r):
         return int(r * self.costmap_cols_ + c)
 
-    # Checks if given cell indices are outside costmap bounds
+    # Returns true if the cell column and cell row is outside the costmap.
     def outOfMap_(self, c, r):
         return (c < 0 or c >= self.costmap_cols_ or 
                 r < 0 or r >= self.costmap_rows_)
 
-    # Main Dijkstra / A* path planning method with hybrid cost function
+    # Runs the path planning algorithm based on the world coordinates.
     def dijkstra_(self, start_x, start_y, goal_x, goal_y):
-        w1 = 0.00001# Weight for costmap cell cost
-        w2 = 0.00001  # Weight for risk metric
+     
+        # Initializations ---------------------------------
 
+        # Initialize nodes - create a node for every cell in the costmap
         nodes = []
         for r in range(self.costmap_rows_):
             for c in range(self.costmap_cols_):
                 nodes.append(DijkstraNode(c, r))
 
+        # Initialize start and goal
         rbt_c, rbt_r = self.XYToCR_(start_x, start_y)
         goal_c, goal_r = self.XYToCR_(goal_x, goal_y)
         rbt_idx = self.CRToIndex_(rbt_c, rbt_r)
         start_node = nodes[rbt_idx]
         
+        # Set start node g-cost to 0
         start_node.g = 0.0
         start_node.h = heuristic(rbt_c, rbt_r, goal_c, goal_r)
         start_node.f = start_node.g + start_node.h
 
+        # Initialize open list
         open_list = []
         heappush(open_list, start_node)
 
+        # Expansion Loop ---------------------------------
         while len(open_list) > 0:
+
+            # Poll cheapest node
             node = heappop(open_list)
 
+            # Skip if already expanded
             if node.expanded:
                 continue
+            
+            # Mark node as expanded
             node.expanded = True
 
+            # Return path if reached goal
             if node.c == goal_c and node.r == goal_r:
                 msg_path = Path()
                 msg_path.header.stamp = self.get_clock().now().to_msg()
                 msg_path.header.frame_id = "map"
 
+                # Obtain the path from the nodes by following parent pointers
                 current = node
                 while current is not None:
                     pose = PoseStamped()
@@ -189,47 +253,72 @@ class Planner(Node):
                     msg_path.poses.append(pose)
                     current = current.parent
                 
+                # Reverse path so goal is at the end
                 msg_path.poses.reverse()
+
+                # publish path
                 self.pub_path_.publish(msg_path)
 
                 self.get_logger().info(
                     f"Path Found from Rbt @ ({start_x:7.3f}, {start_y:7.3f}) to Goal @ ({goal_x:7.3f},{goal_y:7.3f})"
                 )
+
                 return
 
+            # Neighbor Loop --------------------------------------------------
             for dc, dr in [
-                (1, 0), (1, 1), (0, 1), (-1, 1),
-                (-1, 0), (-1, -1), (0, -1), (1, -1),
+                (1, 0),
+                (1, 1),
+                (0, 1),
+                (-1, 1),
+                (-1, 0),
+                (-1, -1),
+                (0, -1),
+                (1, -1),
             ]:
+                # Get neighbor coordinates and neighbor
                 nb_c = node.c + dc
                 nb_r = node.r + dr
 
+                # Continue if out of map
                 if self.outOfMap_(nb_c, nb_r):
                     continue
 
+                # Get neighbor index
                 nb_idx = self.CRToIndex_(nb_c, nb_r)
+
+                # Get the neighbor node
                 nb_node = nodes[nb_idx]
 
+                # Continue if neighbor is expanded
                 if nb_node.expanded:
                     continue
 
+                # Ignore if the cell cost exceeds max_access_cost (to avoid passing through obstacles)
                 if self.costmap_[nb_idx] > self.max_access_cost_:
                     continue
 
+                # Calculate distance to neighbor
                 distance = hypot(dc, dr)
-                cell_risk = self.risk_metric(nb_c, nb_r)
-
-                g_tentative = node.g + distance * (w1 * self.costmap_[nb_idx] + w2 * cell_risk + 1)
-                if g_tentative < nb_node.g:
+                
+                # Calculate tentative g-cost
+                g_tentative = node.g + distance * (self.costmap_[nb_idx] + 1)
+                h_tentative = heuristic(nb_c, nb_r, goal_c, goal_r)
+                f_tentative = g_tentative + h_tentative
+                
+                # Update if this path is better
+                if f_tentative < nb_node.f:
                     nb_node.g = g_tentative
-                    nb_node.h = heuristic(nb_c, nb_r, goal_c, goal_r)
-                    nb_node.f = nb_node.g + nb_node.h
+                    nb_node.h = h_tentative
+                    nb_node.f = f_tentative
                     nb_node.parent = node
                     heappush(open_list, nb_node)
+
 
         self.get_logger().warn("No Path Found!")
 
 
+# Main Boiler Plate =============================================================
 def main(args=None):
     rclpy.init(args=args)
     rclpy.spin(Planner())
