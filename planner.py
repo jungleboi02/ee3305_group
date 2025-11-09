@@ -256,6 +256,9 @@ class Planner(Node):
                 # Reverse path so goal is at the end
                 msg_path.poses.reverse()
 
+                # smooth path
+                self.smoothPath(msg_path)
+
                 # publish path
                 self.pub_path_.publish(msg_path)
 
